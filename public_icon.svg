@@ -1,0 +1,17 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- Фон -->
+  <rect width="64" height="64" rx="12" fill="#3498db"/>
+  
+  <!-- Документ -->
+  <rect x="16" y="12" width="32" height="40" rx="4" fill="white"/>
+  
+  <!-- Линии текста -->
+  <rect x="20" y="20" width="24" height="2" rx="1" fill="#3498db"/>
+  <rect x="20" y="26" width="20" height="2" rx="1" fill="#3498db"/>
+  <rect x="20" y="32" width="22" height="2" rx="1" fill="#3498db"/>
+  <rect x="20" y="38" width="18" height="2" rx="1" fill="#3498db"/>
+  
+  <!-- Карандаш -->
+  <rect x="36" y="8" width="3" height="12" rx="1.5" fill="#e74c3c" transform="rotate(45 37.5 14)"/>
+  <circle cx="40" cy="4" r="2" fill="#e74c3c"/>
+</svg>

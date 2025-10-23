@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Миграция данных анкетирования</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 20px; 
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button { 
+            margin: 5px; 
+            padding: 10px 15px; 
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover { background: #0056b3; }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+        pre { 
+            background: #f8f9fa; 
+            padding: 10px; 
+            border-radius: 4px;
+            overflow-x: auto;
+            max-height: 300px;
+        }
+        .data-preview {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Миграция данных системы анкетирования</h1>
+        <p>Этот инструмент поможет перенести данные между разными доменами/портами.</p>
+        
+        <div class="section">
+            <h2>1. Проверка текущих данных</h2>
+            <button onclick="checkCurrentData()">Проверить данные</button>
+            <div id="current-data"></div>
+        </div>
+        
+        <div class="section">
+            <h2>2. Экспорт данных</h2>
+            <button onclick="exportData()">Экспортировать все данные</button>
+            <div id="export-status"></div>
+            <pre id="exported-data"></pre>
+        </div>
+        
+        <div class="section">
+            <h2>3. Импорт данных</h2>
+            <textarea id="import-data" placeholder="Вставьте сюда экспортированные данные..." style="width: 100%; height: 100px; margin: 10px 0;"></textarea>
+            <button onclick="importData()">Импортировать данные</button>
+            <div id="import-status"></div>
+        </div>
+        
+        <div class="section">
+            <h2>4. Очистка данных</h2>
+            <button onclick="clearAllData()" style="background: #dc3545;">Очистить все данные</button>
+            <div id="clear-status"></div>
+        </div>
+        
+        <div class="section">
+            <h2>5. Инструкции</h2>
+            <ol>
+                <li><strong>Создайте анкету</strong> в dev режиме (localhost:5173)</li>
+                <li><strong>Экспортируйте данные</strong> с помощью кнопки выше</li>
+                <li><strong>Откройте собранную версию</strong> (localhost:8080)</li>
+                <li><strong>Импортируйте данные</strong> в собранную версию</li>
+                <li><strong>Проверьте</strong>, что анкета появилась в админке</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const SURVEYS_KEY = 'asrr_surveys';
+        const RESPONSES_KEY = 'asrr_responses';
+        
+        function checkCurrentData() {
+            const status = document.getElementById('current-data');
+            try {
+                const surveys = JSON.parse(localStorage.getItem(SURVEYS_KEY) || '[]');
+                const responses = JSON.parse(localStorage.getItem(RESPONSES_KEY) || '[]');
+                
+                let html = `<div class="success">✓ Данные найдены</div>`;
+                html += `<p><strong>Анкеты:</strong> ${surveys.length}</p>`;
+                html += `<p><strong>Ответы:</strong> ${responses.length}</p>`;
+                
+                if (surveys.length > 0) {
+                    html += '<h4>Список анкет:</h4><ul>';
+                    surveys.forEach(survey => {
+                        html += `<li>${survey.title} (ID: ${survey.id})</li>`;
+                    });
+                    html += '</ul>';
+                }
+                
+                status.innerHTML = html;
+            } catch (e) {
+                status.innerHTML = `<div class="error">✗ Ошибка: ${e.message}</div>`;
+            }
+        }
+        
+        function exportData() {
+            const status = document.getElementById('export-status');
+            const dataDiv = document.getElementById('exported-data');
+            
+            try {
+                const surveys = JSON.parse(localStorage.getItem(SURVEYS_KEY) || '[]');
+                const responses = JSON.parse(localStorage.getItem(RESPONSES_KEY) || '[]');
+                
+                const exportData = {
+                    surveys: surveys,
+                    responses: responses,
+                    exportedAt: new Date().toISOString(),
+                    version: '1.0'
+                };
+                
+                const jsonString = JSON.stringify(exportData, null, 2);
+                dataDiv.textContent = jsonString;
+                
+                status.innerHTML = `<div class="success">✓ Данные экспортированы (${surveys.length} анкет, ${responses.length} ответов)</div>`;
+                
+                // Копируем в буфер обмена
+                navigator.clipboard.writeText(jsonString).then(() => {
+                    status.innerHTML += '<div class="success">✓ Данные скопированы в буфер обмена</div>';
+                }).catch(() => {
+                    status.innerHTML += '<div class="warning">⚠ Не удалось скопировать в буфер обмена</div>';
+                });
+                
+            } catch (e) {
+                status.innerHTML = `<div class="error">✗ Ошибка экспорта: ${e.message}</div>`;
+            }
+        }
+        
+        function importData() {
+            const status = document.getElementById('import-status');
+            const importText = document.getElementById('import-data').value;
+            
+            if (!importText.trim()) {
+                status.innerHTML = '<div class="error">✗ Введите данные для импорта</div>';
+                return;
+            }
+            
+            try {
+                const importData = JSON.parse(importText);
+                
+                if (!importData.surveys || !importData.responses) {
+                    status.innerHTML = '<div class="error">✗ Неверный формат данных</div>';
+                    return;
+                }
+                
+                // Сохраняем данные
+                localStorage.setItem(SURVEYS_KEY, JSON.stringify(importData.surveys));
+                localStorage.setItem(RESPONSES_KEY, JSON.stringify(importData.responses));
+                
+                status.innerHTML = `<div class="success">✓ Данные импортированы (${importData.surveys.length} анкет, ${importData.responses.length} ответов)</div>`;
+                
+                // Очищаем поле ввода
+                document.getElementById('import-data').value = '';
+                
+            } catch (e) {
+                status.innerHTML = `<div class="error">✗ Ошибка импорта: ${e.message}</div>`;
+            }
+        }
+        
+        function clearAllData() {
+            const status = document.getElementById('clear-status');
+            
+            if (confirm('Вы уверены, что хотите очистить все данные? Это действие нельзя отменить.')) {
+                try {
+                    localStorage.removeItem(SURVEYS_KEY);
+                    localStorage.removeItem(RESPONSES_KEY);
+                    status.innerHTML = '<div class="success">✓ Все данные очищены</div>';
+                } catch (e) {
+                    status.innerHTML = `<div class="error">✗ Ошибка очистки: ${e.message}</div>`;
+                }
+            }
+        }
+        
+        // Автоматическая проверка при загрузке
+        window.onload = function() {
+            checkCurrentData();
+        };
+    </script>
+</body>
+</html>
+
+
