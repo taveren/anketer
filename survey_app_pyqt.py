@@ -32,6 +32,7 @@ class SurveyApp(QMainWindow):
         self.setWindowTitle("Система анкетирования")
         self.setGeometry(100, 100, 400, 300)
         self.setFixedSize(400, 300)
+        self.center_window() # Центрируем окно
         
         # Определяем путь к данным
         self.data_dir = self.get_data_directory()
@@ -56,6 +57,14 @@ class SurveyApp(QMainWindow):
         self.setup_styles()
         self.setup_icon()
         
+    def center_window(self):
+        """Центрируем окно на экране"""
+        screen = QApplication.primaryScreen().geometry()
+        size = self.geometry()
+        x = (screen.width() - size.width()) // 2
+        y = (screen.height() - size.height()) // 2
+        self.move(x, y)
+    
     def get_data_directory(self):
         """Получаем путь к директории с данными в зависимости от ОС"""
         if platform.system() == "Windows":
@@ -199,7 +208,6 @@ class SurveyApp(QMainWindow):
             }
             QPushButton:hover {
                 background-color: #229954;
-                transform: scale(1.05);
             }
             QPushButton:pressed {
                 background-color: #1e8449;
