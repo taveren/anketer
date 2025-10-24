@@ -199,7 +199,6 @@ class SurveyApp(QMainWindow):
             }
             QPushButton:hover {
                 background-color: #229954;
-                transform: scale(1.05);
             }
             QPushButton:pressed {
                 background-color: #1e8449;
