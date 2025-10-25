@@ -29,7 +29,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QPalette, QColor
 class SurveyApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Система анкетирования")
+        self.setWindowTitle("ASRR - Система анкетирования")
         self.setGeometry(100, 100, 400, 300)
         self.setFixedSize(400, 300)
         self.center_window() # Центрируем окно
@@ -499,11 +499,21 @@ class SurveyApp(QMainWindow):
         self.current_answers[question['id']] = answer
     
     def prev_question(self):
-        """Предыдущий вопрос"""
+        """Предыдущий вопрос с учетом условной логики"""
         if self.current_question > 0:
             self.save_current_answer()
-            self.current_question -= 1
-            self.show_question()
+            
+            # Находим предыдущий видимый вопрос
+            prev_visible_index = None
+            for i in range(self.current_question - 1, -1, -1):
+                question = self.current_survey['questions'][i]
+                if self.should_show_question(question, self.current_answers):
+                    prev_visible_index = i
+                    break
+            
+            if prev_visible_index is not None:
+                self.current_question = prev_visible_index
+                self.show_question()
     
     def next_question(self):
         """Следующий вопрос"""
@@ -1309,8 +1319,15 @@ class SurveyApp(QMainWindow):
 
             has_next = current_visible_index < len(visible_questions) - 1
 
-        # Обновляем кнопки
-        self.prev_button.setEnabled(self.current_question > 0)
+        # Обновляем кнопки с учетом условной логики
+        has_prev = False
+        for i in range(self.current_question - 1, -1, -1):
+            question = self.current_survey['questions'][i]
+            if self.should_show_question(question, self.current_answers):
+                has_prev = True
+                break
+        
+        self.prev_button.setEnabled(has_prev)
 
         if has_next:
             self.next_button.setText("Далее")
