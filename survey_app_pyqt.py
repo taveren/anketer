@@ -785,7 +785,8 @@ class SurveyApp(QMainWindow):
             self.update_admin_table()
         
         # Обновляем комбобокс анкеты по умолчанию
-        self.refresh_default_survey_combo()
+        if hasattr(self, 'default_survey_combo'):
+            self.refresh_default_survey_combo()
     
     def edit_survey(self, parent):
         """Редактируем анкету"""
@@ -978,7 +979,7 @@ class SurveyApp(QMainWindow):
         add_condition_btn.clicked.connect(lambda: self.add_condition(survey))
         
         edit_condition_btn = QPushButton("Редактировать")
-        edit_condition_btn.clicked.connect(self.edit_condition)
+        edit_condition_btn.clicked.connect(lambda: self.edit_condition(survey))
         
         delete_condition_btn = QPushButton("Удалить")
         delete_condition_btn.clicked.connect(self.delete_condition)
@@ -1016,7 +1017,7 @@ class SurveyApp(QMainWindow):
         
         # Загружаем данные если редактируем
         if question_index is not None:
-            self.load_question_data(survey['questions'][question_index])
+            self.load_question_data(survey['questions'][question_index], survey)
         
         # Инициализируем тип вопроса
         self.on_question_type_changed()
@@ -1077,7 +1078,7 @@ class SurveyApp(QMainWindow):
         # Оператор
         operator_layout = QFormLayout()
         self.operator_combo = QComboBox()
-        self.operator_combo.addItems(["равно", "не равно", "содержит", "больше", "меньше"])
+        self.operator_combo.addItems(["равно", "не равно", "содержит", "больше", "больше или равно", "меньше", "меньше или равно"])
         operator_layout.addRow("Оператор:", self.operator_combo)
         layout.addLayout(operator_layout)
         
@@ -1130,18 +1131,27 @@ class SurveyApp(QMainWindow):
         
         target_question = survey['questions'][target_index]
         
-        # Если вопрос имеет тип checkbox, показываем чекбоксы для быстрого выбора
-        if target_question.get('type') == 'checkbox' and target_question.get('options'):
+        # Если вопрос имеет тип checkbox или radio, показываем опции для быстрого выбора
+        if target_question.get('type') in ['checkbox', 'radio'] and target_question.get('options'):
             label = QLabel("Быстрый выбор (или введите вручную):")
             label.setStyleSheet("font-weight: bold; color: #666;")
             self.checkbox_layout.addWidget(label)
             
             for option in target_question['options']:
-                checkbox = QCheckBox(option)
-                checkbox.toggled.connect(
-                    lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
-                )
-                self.checkbox_layout.addWidget(checkbox)
+                if target_question.get('type') == 'checkbox':
+                    # Для checkbox используем чекбоксы
+                    checkbox = QCheckBox(option)
+                    checkbox.toggled.connect(
+                        lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
+                    )
+                    self.checkbox_layout.addWidget(checkbox)
+                else:  # radio
+                    # Для radio используем радиокнопки
+                    radio = QRadioButton(option)
+                    radio.toggled.connect(
+                        lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
+                    )
+                    self.checkbox_layout.addWidget(radio)
     
     def save_condition(self, dialog):
         """Сохраняем условие"""
@@ -1159,7 +1169,9 @@ class SurveyApp(QMainWindow):
             "не равно": "not_equals", 
             "содержит": "contains",
             "больше": "greater_than",
-            "меньше": "less_than"
+            "больше или равно": "greater_or_equal",
+            "меньше": "less_than",
+            "меньше или равно": "less_or_equal"
         }
         
         condition = {
@@ -1180,7 +1192,7 @@ class SurveyApp(QMainWindow):
         
         dialog.accept()
     
-    def edit_condition(self):
+    def edit_condition(self, survey):
         """Редактируем условие"""
         current_row = self.conditions_list.currentRow()
         if current_row < 0:
@@ -1205,8 +1217,8 @@ class SurveyApp(QMainWindow):
         # Выбор целевого вопроса
         target_layout = QFormLayout()
         self.target_question_combo = QComboBox()
-        for i, q in enumerate(self.current_survey['questions']):
-            if i != len(self.current_survey['questions']) - 1:  # Не последний вопрос
+        for i, q in enumerate(survey['questions']):
+            if i != len(survey['questions']) - 1:  # Не последний вопрос
                 self.target_question_combo.addItem(f"{i+1}. {q['text']}", i)
         target_layout.addRow("Целевой вопрос:", self.target_question_combo)
         layout.addLayout(target_layout)
@@ -1214,7 +1226,7 @@ class SurveyApp(QMainWindow):
         # Оператор
         operator_layout = QFormLayout()
         self.operator_combo = QComboBox()
-        self.operator_combo.addItems(["равно", "не равно", "содержит", "больше", "меньше"])
+        self.operator_combo.addItems(["равно", "не равно", "содержит", "больше", "больше или равно", "меньше", "меньше или равно"])
         operator_layout.addRow("Оператор:", self.operator_combo)
         layout.addLayout(operator_layout)
         
@@ -1227,7 +1239,7 @@ class SurveyApp(QMainWindow):
         # Заполняем поля данными существующего условия
         # Находим индекс целевого вопроса
         target_index = None
-        for i, q in enumerate(self.current_survey['questions']):
+        for i, q in enumerate(survey['questions']):
             if q['id'] == condition['targetId']:
                 target_index = i
                 break
@@ -1241,7 +1253,9 @@ class SurveyApp(QMainWindow):
             "not_equals": "не равно", 
             "contains": "содержит",
             "greater_than": "больше",
-            "less_than": "меньше"
+            "greater_or_equal": "больше или равно",
+            "less_than": "меньше",
+            "less_or_equal": "меньше или равно"
         }
         reverse_operator_map = {v: k for k, v in operator_map.items()}
         operator_text = reverse_operator_map.get(condition['operator'], "содержит")
@@ -1283,7 +1297,9 @@ class SurveyApp(QMainWindow):
             "не равно": "not_equals", 
             "содержит": "contains",
             "больше": "greater_than",
-            "меньше": "less_than"
+            "больше или равно": "greater_or_equal",
+            "меньше": "less_than",
+            "меньше или равно": "less_or_equal"
         }
         
         # Обновляем условие
@@ -1313,7 +1329,7 @@ class SurveyApp(QMainWindow):
         self.conditions_list.clear()
         self.current_conditions = []
     
-    def load_question_data(self, question):
+    def load_question_data(self, question, survey=None):
         """Загружаем данные вопроса в редактор"""
         self.question_text_edit.setPlainText(question['text'])
         self.question_type_combo.setCurrentText(question['type'])
@@ -1330,7 +1346,9 @@ class SurveyApp(QMainWindow):
         for condition in self.current_conditions:
             # Находим целевой вопрос по ID
             target_question = None
-            for q in self.current_survey['questions']:
+            # Используем переданный survey или self.current_survey
+            questions_list = survey['questions'] if survey else (self.current_survey['questions'] if hasattr(self, 'current_survey') and self.current_survey else [])
+            for q in questions_list:
                 if q['id'] == condition['targetId']:
                     target_question = q
                     break
@@ -1548,9 +1566,19 @@ class SurveyApp(QMainWindow):
                 return float(answer) > float(value)
             except (ValueError, TypeError):
                 return False
+        elif operator == 'greater_or_equal':
+            try:
+                return float(answer) >= float(value)
+            except (ValueError, TypeError):
+                return False
         elif operator == 'less_than':
             try:
                 return float(answer) < float(value)
+            except (ValueError, TypeError):
+                return False
+        elif operator == 'less_or_equal':
+            try:
+                return float(answer) <= float(value)
             except (ValueError, TypeError):
                 return False
         
@@ -1707,8 +1735,10 @@ class SurveyApp(QMainWindow):
                     self.save_surveys()
                     
                     # Обновляем интерфейс
-                    self.update_admin_table()
-                    self.refresh_default_survey_combo()
+                    if hasattr(self, 'admin_table'):
+                        self.update_admin_table()
+                    if hasattr(self, 'default_survey_combo'):
+                        self.refresh_default_survey_combo()
                     
                     QMessageBox.information(self, "Успех", f"Анкета '{survey.get('title', 'Без названия')}' успешно импортирована")
                 else:
