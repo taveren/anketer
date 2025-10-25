@@ -105,7 +105,7 @@ class SurveyApp(QMainWindow):
                     return json.load(f)
             except Exception as e:
                 print(f"Ошибка загрузки настроек: {e}")
-        return {"default_survey_id": None}
+        return {"default_survey_id": None, "admin_password": "admin123"}
     
     def save_settings(self):
         """Сохраняем настройки в файл"""
@@ -265,6 +265,82 @@ class SurveyApp(QMainWindow):
         self.settings["default_survey_id"] = survey_id
         self.save_settings()
         QMessageBox.information(self, "Успех", "Анкета по умолчанию сохранена")
+    
+    def change_password(self):
+        """Смена пароля администратора"""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Смена пароля")
+        dialog.setModal(True)
+        dialog.resize(400, 200)
+        
+        layout = QVBoxLayout(dialog)
+        
+        # Старый пароль
+        old_password_layout = QFormLayout()
+        old_password_edit = QLineEdit()
+        old_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        old_password_layout.addRow("Текущий пароль:", old_password_edit)
+        layout.addLayout(old_password_layout)
+        
+        # Новый пароль
+        new_password_layout = QFormLayout()
+        new_password_edit = QLineEdit()
+        new_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        new_password_layout.addRow("Новый пароль:", new_password_edit)
+        layout.addLayout(new_password_layout)
+        
+        # Подтверждение пароля
+        confirm_password_layout = QFormLayout()
+        confirm_password_edit = QLineEdit()
+        confirm_password_edit.setEchoMode(QLineEdit.EchoMode.Password)
+        confirm_password_layout.addRow("Подтвердите пароль:", confirm_password_edit)
+        layout.addLayout(confirm_password_layout)
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Сохранить")
+        save_btn.clicked.connect(lambda: self.save_new_password(
+            dialog, old_password_edit.text(), new_password_edit.text(), confirm_password_edit.text()
+        ))
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(dialog.reject)
+        
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        dialog.exec()
+    
+    def save_new_password(self, dialog, old_password, new_password, confirm_password):
+        """Сохраняем новый пароль"""
+        # Проверяем старый пароль
+        if old_password != self.settings.get("admin_password", "admin123"):
+            QMessageBox.warning(self, "Ошибка", "Неверный текущий пароль")
+            return
+        
+        # Проверяем новый пароль
+        if not new_password:
+            QMessageBox.warning(self, "Ошибка", "Введите новый пароль")
+            return
+        
+        if new_password != confirm_password:
+            QMessageBox.warning(self, "Ошибка", "Пароли не совпадают")
+            return
+        
+        if len(new_password) < 4:
+            QMessageBox.warning(self, "Ошибка", "Пароль должен содержать минимум 4 символа")
+            return
+        
+        # Сохраняем новый пароль
+        self.settings["admin_password"] = new_password
+        self.save_settings()
+        
+        QMessageBox.information(self, "Успех", "Пароль успешно изменен")
+        dialog.accept()
     
     def setup_styles(self):
         """Настраиваем стили приложения"""
@@ -559,7 +635,7 @@ class SurveyApp(QMainWindow):
         """Показываем панель администратора"""
         # Проверяем пароль
         password, ok = QInputDialog.getText(self, "Авторизация", "Введите пароль администратора:", QLineEdit.EchoMode.Password)
-        if not ok or password != "admin123":
+        if not ok or password != self.settings.get("admin_password", "admin123"):
             QMessageBox.critical(self, "Ошибка", "Неверный пароль")
             return
         
@@ -617,9 +693,21 @@ class SurveyApp(QMainWindow):
         import_button = QPushButton("Импорт данных")
         import_button.clicked.connect(self.import_data)
         
+        change_password_button = QPushButton("Сменить пароль")
+        change_password_button.clicked.connect(self.change_password)
+        
+        export_single_button = QPushButton("Экспорт анкеты")
+        export_single_button.clicked.connect(self.export_single_survey)
+        
+        import_single_button = QPushButton("Импорт анкеты")
+        import_single_button.clicked.connect(self.import_single_survey)
+        
         button_layout.addWidget(create_button)
         button_layout.addWidget(export_button)
         button_layout.addWidget(import_button)
+        button_layout.addWidget(export_single_button)
+        button_layout.addWidget(import_single_button)
+        button_layout.addWidget(change_password_button)
         button_layout.addStretch()
         
         layout.addLayout(button_layout)
@@ -695,6 +783,9 @@ class SurveyApp(QMainWindow):
         # Обновляем таблицу в админке если она открыта
         if hasattr(self, 'admin_table_ref'):
             self.update_admin_table()
+        
+        # Обновляем комбобокс анкеты по умолчанию
+        self.refresh_default_survey_combo()
     
     def edit_survey(self, parent):
         """Редактируем анкету"""
@@ -996,6 +1087,20 @@ class SurveyApp(QMainWindow):
         value_layout.addRow("Значение:", self.condition_value_edit)
         layout.addLayout(value_layout)
         
+        # Контейнер для чекбоксов (показывается динамически)
+        self.checkbox_container = QWidget()
+        self.checkbox_layout = QVBoxLayout(self.checkbox_container)
+        self.checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self.checkbox_container)
+        
+        # Обработчик изменения целевого вопроса
+        self.target_question_combo.currentIndexChanged.connect(
+            lambda: self.update_condition_value_options(survey)
+        )
+        
+        # Инициализируем опции для первого вопроса
+        self.update_condition_value_options(survey)
+        
         # Кнопки
         button_layout = QHBoxLayout()
         
@@ -1012,6 +1117,31 @@ class SurveyApp(QMainWindow):
         layout.addLayout(button_layout)
         
         condition_dialog.exec()
+    
+    def update_condition_value_options(self, survey):
+        """Обновляем опции для выбора значения условия"""
+        # Очищаем контейнер
+        for i in reversed(range(self.checkbox_layout.count())):
+            self.checkbox_layout.itemAt(i).widget().setParent(None)
+        
+        target_index = self.target_question_combo.currentData()
+        if target_index is None:
+            return
+        
+        target_question = survey['questions'][target_index]
+        
+        # Если вопрос имеет тип checkbox, показываем чекбоксы для быстрого выбора
+        if target_question.get('type') == 'checkbox' and target_question.get('options'):
+            label = QLabel("Быстрый выбор (или введите вручную):")
+            label.setStyleSheet("font-weight: bold; color: #666;")
+            self.checkbox_layout.addWidget(label)
+            
+            for option in target_question['options']:
+                checkbox = QCheckBox(option)
+                checkbox.toggled.connect(
+                    lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
+                )
+                self.checkbox_layout.addWidget(checkbox)
     
     def save_condition(self, dialog):
         """Сохраняем условие"""
@@ -1052,7 +1182,123 @@ class SurveyApp(QMainWindow):
     
     def edit_condition(self):
         """Редактируем условие"""
-        QMessageBox.information(self, "Информация", "Редактирование условий будет добавлено в следующей версии")
+        current_row = self.conditions_list.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Ошибка", "Выберите условие для редактирования")
+            return
+        
+        if current_row >= len(self.current_conditions):
+            QMessageBox.warning(self, "Ошибка", "Условие не найдено")
+            return
+        
+        # Получаем условие для редактирования
+        condition = self.current_conditions[current_row]
+        
+        # Создаем диалог редактирования
+        condition_dialog = QDialog(self)
+        condition_dialog.setWindowTitle("Редактировать условие")
+        condition_dialog.setModal(True)
+        condition_dialog.resize(400, 300)
+        
+        layout = QVBoxLayout(condition_dialog)
+        
+        # Выбор целевого вопроса
+        target_layout = QFormLayout()
+        self.target_question_combo = QComboBox()
+        for i, q in enumerate(self.current_survey['questions']):
+            if i != len(self.current_survey['questions']) - 1:  # Не последний вопрос
+                self.target_question_combo.addItem(f"{i+1}. {q['text']}", i)
+        target_layout.addRow("Целевой вопрос:", self.target_question_combo)
+        layout.addLayout(target_layout)
+        
+        # Оператор
+        operator_layout = QFormLayout()
+        self.operator_combo = QComboBox()
+        self.operator_combo.addItems(["равно", "не равно", "содержит", "больше", "меньше"])
+        operator_layout.addRow("Оператор:", self.operator_combo)
+        layout.addLayout(operator_layout)
+        
+        # Значение
+        value_layout = QFormLayout()
+        self.condition_value_edit = QLineEdit()
+        value_layout.addRow("Значение:", self.condition_value_edit)
+        layout.addLayout(value_layout)
+        
+        # Заполняем поля данными существующего условия
+        # Находим индекс целевого вопроса
+        target_index = None
+        for i, q in enumerate(self.current_survey['questions']):
+            if q['id'] == condition['targetId']:
+                target_index = i
+                break
+        
+        if target_index is not None:
+            self.target_question_combo.setCurrentIndex(target_index)
+        
+        # Устанавливаем оператор
+        operator_map = {
+            "equals": "равно",
+            "not_equals": "не равно", 
+            "contains": "содержит",
+            "greater_than": "больше",
+            "less_than": "меньше"
+        }
+        reverse_operator_map = {v: k for k, v in operator_map.items()}
+        operator_text = reverse_operator_map.get(condition['operator'], "содержит")
+        self.operator_combo.setCurrentText(operator_text)
+        
+        # Устанавливаем значение
+        self.condition_value_edit.setText(condition['value'])
+        
+        # Кнопки
+        button_layout = QHBoxLayout()
+        
+        save_btn = QPushButton("Сохранить")
+        save_btn.clicked.connect(lambda: self.save_edited_condition(condition_dialog, current_row))
+        
+        cancel_btn = QPushButton("Отмена")
+        cancel_btn.clicked.connect(condition_dialog.reject)
+        
+        button_layout.addWidget(save_btn)
+        button_layout.addWidget(cancel_btn)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        condition_dialog.exec()
+    
+    def save_edited_condition(self, dialog, condition_index):
+        """Сохраняем отредактированное условие"""
+        target_index = self.target_question_combo.currentData()
+        operator = self.operator_combo.currentText()
+        value = self.condition_value_edit.text()
+        
+        if not value:
+            QMessageBox.warning(self, "Ошибка", "Введите значение для условия")
+            return
+        
+        # Преобразуем оператор
+        operator_map = {
+            "равно": "equals",
+            "не равно": "not_equals", 
+            "содержит": "contains",
+            "больше": "greater_than",
+            "меньше": "less_than"
+        }
+        
+        # Обновляем условие
+        self.current_conditions[condition_index] = {
+            'id': self.current_conditions[condition_index]['id'],  # Сохраняем ID
+            'targetId': f"q{target_index}",
+            'operator': operator_map[operator],
+            'value': value
+        }
+        
+        # Обновляем отображение в списке
+        condition_text = f"Если {self.target_question_combo.currentText()} {operator} '{value}'"
+        self.conditions_list.item(condition_index).setText(condition_text)
+        
+        dialog.accept()
     
     def delete_condition(self):
         """Удаляем условие"""
@@ -1082,7 +1328,25 @@ class SurveyApp(QMainWindow):
         self.conditions_list.clear()
         self.current_conditions = question.get('conditions', [])
         for condition in self.current_conditions:
-            condition_text = f"Если q{condition['targetId']} {condition['operator']} '{condition['value']}'"
+            # Находим целевой вопрос по ID
+            target_question = None
+            for q in self.current_survey['questions']:
+                if q['id'] == condition['targetId']:
+                    target_question = q
+                    break
+            
+            # Преобразуем оператор в русский текст
+            operator_map = {
+                "equals": "равно",
+                "not_equals": "не равно", 
+                "contains": "содержит",
+                "greater_than": "больше",
+                "less_than": "меньше"
+            }
+            
+            operator_text = operator_map.get(condition['operator'], condition['operator'])
+            question_text = target_question['text'] if target_question else condition['targetId']
+            condition_text = f"Если {question_text} {operator_text} '{condition['value']}'"
             self.conditions_list.addItem(condition_text)
     
     def save_question(self, survey, question_index, dialog):
@@ -1380,6 +1644,96 @@ class SurveyApp(QMainWindow):
                     QMessageBox.critical(self, "Ошибка", "Неверный формат файла")
             except Exception as e:
                 QMessageBox.critical(self, "Ошибка", f"Не удалось импортировать данные: {e}")
+    
+    def export_single_survey(self):
+        """Экспорт отдельной анкеты"""
+        # Получаем выбранную анкету из таблицы
+        current_row = self.admin_table.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Ошибка", "Выберите анкету для экспорта")
+            return
+        
+        if current_row >= len(self.surveys):
+            QMessageBox.warning(self, "Ошибка", "Анкета не найдена")
+            return
+        
+        survey = self.surveys[current_row]
+        
+        # Выбираем файл для сохранения
+        filename, _ = QFileDialog.getSaveFileName(
+            self, "Экспорт анкеты", f"{survey.get('title', 'Анкета')}.json", 
+            "JSON files (*.json);;All files (*.*)"
+        )
+        
+        if filename:
+            try:
+                export_data = {
+                    'survey': survey,
+                    'exportDate': datetime.now().isoformat(),
+                    'version': '1.0.0'
+                }
+                
+                with open(filename, 'w', encoding='utf-8') as f:
+                    json.dump(export_data, f, ensure_ascii=False, indent=2)
+                
+                QMessageBox.information(self, "Успех", f"Анкета '{survey.get('title', 'Без названия')}' успешно экспортирована")
+                
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось экспортировать анкету: {e}")
+    
+    def import_single_survey(self):
+        """Импорт отдельной анкеты"""
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "Импорт анкеты", "", "JSON files (*.json);;All files (*.*)"
+        )
+        
+        if filename:
+            try:
+                with open(filename, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                
+                if 'survey' in data:
+                    survey = data['survey']
+                    
+                    # Проверяем на дубликаты ID
+                    existing_ids = [s.get('id') for s in self.surveys]
+                    if survey.get('id') in existing_ids:
+                        # Генерируем новый ID
+                        survey['id'] = str(uuid.uuid4())
+                        survey['title'] = f"{survey.get('title', 'Анкета')} (импорт)"
+                    
+                    # Добавляем анкету
+                    self.surveys.append(survey)
+                    self.save_surveys()
+                    
+                    # Обновляем интерфейс
+                    self.update_admin_table()
+                    self.refresh_default_survey_combo()
+                    
+                    QMessageBox.information(self, "Успех", f"Анкета '{survey.get('title', 'Без названия')}' успешно импортирована")
+                else:
+                    QMessageBox.critical(self, "Ошибка", "Неверный формат файла анкеты")
+            except Exception as e:
+                QMessageBox.critical(self, "Ошибка", f"Не удалось импортировать анкету: {e}")
+    
+    def refresh_default_survey_combo(self):
+        """Обновляем список анкет в комбобоксе по умолчанию"""
+        if hasattr(self, 'default_survey_combo'):
+            # Сохраняем текущий выбор
+            current_id = self.default_survey_combo.currentData()
+            
+            # Очищаем и заполняем заново
+            self.default_survey_combo.clear()
+            self.default_survey_combo.addItem("Не выбрана", None)
+            
+            for survey in self.surveys:
+                self.default_survey_combo.addItem(survey.get("title", "Без названия"), survey.get("id"))
+            
+            # Восстанавливаем выбор
+            if current_id:
+                index = self.default_survey_combo.findData(current_id)
+                if index >= 0:
+                    self.default_survey_combo.setCurrentIndex(index)
 
 def main():
     app = QApplication(sys.argv)
