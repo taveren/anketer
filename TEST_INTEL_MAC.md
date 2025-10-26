@@ -151,3 +151,5 @@ ps aux | grep SurveyApp
 **Автор**: ASRR Team  
 **Версия**: 1.0.0  
 **Дата**: 2025
+
+

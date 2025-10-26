@@ -139,3 +139,5 @@ open /Applications/SurveyApp.app
 **Автор**: ASRR Team  
 **Версия**: 1.0.0  
 **Дата**: 2025
+
+
