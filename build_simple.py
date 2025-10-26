@@ -23,7 +23,6 @@ def main():
         "--onefile",
         "--windowed", 
         "--name", "SurveyApp",
-        "--icon", "asrr_logo.png",
         "survey_app_pyqt.py"
     ]
     

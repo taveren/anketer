@@ -29,7 +29,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QPalette, QColor
 class SurveyApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ASRR - Система анкетирования")
+        self.setWindowTitle("SurveyApp - Система анкетирования")
         self.setGeometry(100, 100, 400, 300)
         self.setFixedSize(400, 300)
         self.center_window() # Центрируем окно

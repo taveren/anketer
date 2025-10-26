@@ -31,7 +31,6 @@ def main():
         "--onefile",
         "--windowed", 
         "--name", "SurveyApp",
-        "--icon", "asrr_logo.png",
         "--distpath", "dist",
         "--workpath", "build",
         "survey_app_pyqt.py"
