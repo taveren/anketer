@@ -115,18 +115,40 @@ class SurveyApp(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", f"Не удалось сохранить настройки: {e}")
     
+    def log_debug(self, message: str):
+        """Пишем отладочную строку в файл и stdout"""
+        try:
+            ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            line = f"[{ts}] {message}\n"
+            print(line.strip())
+            log_path = os.path.join(self.data_dir, 'debug.log')
+            with open(log_path, 'a', encoding='utf-8') as lf:
+                lf.write(line)
+        except Exception:
+            # Не мешаем работе, если логирование сломалось
+            pass
+    
     def setup_icon(self):
         """Устанавливаем иконку приложения"""
         try:
-            # Пытаемся загрузить иконку из favicon.ico
-            icon_path = os.path.join(os.path.dirname(__file__), "favicon.ico")
-            if os.path.exists(icon_path):
-                self.setWindowIcon(QIcon(icon_path))
-            else:
-                # Если иконка не найдена, создаем простую иконку
-                pixmap = QPixmap(32, 32)
-                pixmap.fill(QColor("#3498db"))
-                self.setWindowIcon(QIcon(pixmap))
+            # Пытаемся загрузить логотип ASRR
+            icon_paths = [
+                os.path.join(os.path.dirname(__file__), "asrr_logo.ico"),
+                os.path.join(os.path.dirname(__file__), "asrr_logo.png"),
+                os.path.join(os.path.dirname(__file__), "public_icon.ico")
+            ]
+            
+            for icon_path in icon_paths:
+                if os.path.exists(icon_path):
+                    self.setWindowIcon(QIcon(icon_path))
+                    print(f"Иконка загружена: {icon_path}")
+                    return
+            
+            # Если иконка не найдена, создаем простую иконку
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(QColor("#3498db"))
+            self.setWindowIcon(QIcon(pixmap))
+            print("Использована стандартная иконка")
         except Exception as e:
             print(f"Ошибка загрузки иконки: {e}")
     
@@ -537,7 +559,16 @@ class SurveyApp(QMainWindow):
         elif question['type'] == 'number':
             self.answer_spinbox = QSpinBox()
             self.answer_spinbox.setRange(-999999, 999999)
-            self.answer_spinbox.setValue(int(self.current_answers.get(question['id'], 0)))
+            # Safely set initial value even if stored answer is '', None, or non-numeric
+            stored_value = self.current_answers.get(question['id'], 0)
+            try:
+                if isinstance(stored_value, str) and stored_value.strip() == "":
+                    numeric_value = 0
+                else:
+                    numeric_value = int(float(stored_value))
+            except Exception:
+                numeric_value = 0
+            self.answer_spinbox.setValue(numeric_value)
             self.question_layout.addWidget(self.answer_spinbox)
         
         # Обновляем прогресс
@@ -568,11 +599,16 @@ class SurveyApp(QMainWindow):
         elif question['type'] == 'checkbox':
             answer = [option for option, checkbox in self.answer_checkboxes.items() if checkbox.isChecked()]
         elif question['type'] == 'number':
-            answer = self.answer_spinbox.value()
+            try:
+                answer = int(self.answer_spinbox.value())
+            except Exception as e:
+                self.log_debug(f"save_current_answer number ERROR: {e}")
+                answer = 0
         else:
             answer = ''
         
         self.current_answers[question['id']] = answer
+        self.log_debug(f"save_current_answer: qid={question['id']} type={question['type']} answer={answer}")
     
     def prev_question(self):
         """Предыдущий вопрос с учетом условной логики"""
@@ -737,9 +773,14 @@ class SurveyApp(QMainWindow):
         delete_button = QPushButton("Удалить")
         delete_button.clicked.connect(lambda: self.delete_survey(admin_window))
         
+        docs_button = QPushButton("📖 Документация")
+        docs_button.clicked.connect(self.show_documentation)
+        docs_button.setStyleSheet("QPushButton { background-color: #9C27B0; color: white; border: none; padding: 8px; border-radius: 4px; font-weight: bold; }")
+        
         action_layout.addWidget(edit_button)
         action_layout.addWidget(responses_button)
         action_layout.addWidget(delete_button)
+        action_layout.addWidget(docs_button)
         action_layout.addStretch()
         
         layout.addLayout(action_layout)
@@ -807,6 +848,200 @@ class SurveyApp(QMainWindow):
         
         QMessageBox.information(parent, "Информация", "Функция просмотра ответов будет добавлена в следующей версии")
     
+    def show_documentation(self):
+        """Показываем документацию по созданию анкет"""
+        doc_window = QDialog(self)
+        doc_window.setWindowTitle("📖 Документация - Создание анкет с условной логикой")
+        doc_window.setModal(True)
+        doc_window.resize(900, 700)
+        
+        layout = QVBoxLayout(doc_window)
+        
+        # Создаем текстовое поле с прокруткой
+        text_area = QTextEdit()
+        text_area.setReadOnly(True)
+        text_area.setFont(QFont("Consolas", 10))
+        
+        # Подробная инструкция
+        documentation = """
+# 📋 ПОЛНОЕ РУКОВОДСТВО ПО СОЗДАНИЮ АНКЕТ С УСЛОВНОЙ ЛОГИКОЙ
+
+## 🎯 ОСНОВНЫЕ ПРИНЦИПЫ
+
+Система анкетирования поддерживает условную логику показа вопросов. Это означает, что некоторые вопросы будут показываться только при выполнении определенных условий на основе ответов на предыдущие вопросы.
+
+## 📝 ПОШАГОВОЕ СОЗДАНИЕ АНКЕТЫ
+
+### ШАГ 1: Создание анкеты
+1. Нажмите кнопку "Админ" в главном окне
+2. Введите пароль: admin123
+3. Нажмите "Создать анкету"
+4. Введите название анкеты
+5. Нажмите "Редактировать" для добавления вопросов
+
+### ШАГ 2: Добавление вопросов
+1. В редакторе анкеты нажмите "Добавить вопрос"
+2. Заполните текст вопроса
+3. Выберите тип вопроса:
+   - Текстовый - свободный ввод текста
+   - Числовой - ввод чисел
+   - Выбор (radio) - один вариант из списка
+   - Множественный выбор (checkbox) - несколько вариантов
+
+### ШАГ 3: Настройка вариантов ответов
+Для вопросов типа "Выбор" и "Множественный выбор":
+1. Нажмите "➕ Добавить вариант"
+2. Введите текст варианта
+3. Повторите для всех нужных вариантов
+4. Используйте "📋 Копировать" для быстрого создания похожих вопросов
+
+## 🔗 УСЛОВНАЯ ЛОГИКА - ПОДРОБНОЕ ОПИСАНИЕ
+
+### КАК РАБОТАЮТ УСЛОВИЯ
+
+Условия определяют, когда показывать вопрос. Если у вопроса несколько условий - вопрос покажется при выполнении ЛЮБОГО из них (логика OR). Если ни одно условие не выполнено - вопрос будет скрыт.
+
+### ТИПЫ УСЛОВИЙ
+
+1. **равно** - ответ точно совпадает с указанным значением
+2. **не равно** - ответ отличается от указанного значения  
+3. **содержит** - ответ содержит указанное значение (для множественного выбора)
+4. **больше** - числовое значение больше указанного
+5. **больше или равно** - числовое значение больше или равно указанному
+6. **меньше** - числовое значение меньше указанного
+7. **меньше или равно** - числовое значение меньше или равно указанному
+
+### ПРИМЕРЫ УСЛОВИЙ
+
+#### Пример 1: Простое условие
+```
+Вопрос 1: "Ваш возраст?" (числовой)
+Вопрос 2: "Вы работаете?" (выбор: Да/Нет)
+Условие для Вопроса 2: возраст больше 18
+```
+
+#### Пример 2: Условие с выбором
+```
+Вопрос 1: "Какие симптомы у вас есть?" (множественный выбор: Головная боль, Температура, Кашель)
+Вопрос 2: "Как долго болеете?" (числовой)
+Условие для Вопроса 2: симптомы содержат "Температура"
+```
+
+#### Пример 3: Сложная логика (решение через дублирование)
+```
+Вопрос 1: "Тип исследования?" (выбор: ORADS2, ORADS3)
+Вопрос 2: "Результат анализа?" (числовой)
+Вопрос 3: "M- (низкий риск)" (выбор: Да/Нет)
+Вопрос 4: "M- (средний риск)" (выбор: Да/Нет)
+
+Условие для Вопроса 3: Тип исследования равно "ORADS2"
+Условие для Вопроса 4: Тип исследования равно "ORADS3" И Результат анализа больше 30
+```
+
+## 🛠️ ПРАКТИЧЕСКИЕ СОВЕТЫ
+
+### СОВЕТ 1: Планирование логики
+1. Сначала создайте все основные вопросы
+2. Потом добавьте условия для каждого вопроса
+3. Используйте кнопку "📋 Копировать" для похожих вопросов
+
+### СОВЕТ 2: Тестирование
+1. После создания анкеты обязательно протестируйте её
+2. Пройдите анкету с разными вариантами ответов
+3. Убедитесь, что вопросы показываются правильно
+
+### СОВЕТ 3: Организация вопросов
+1. Размещайте вопросы в логическом порядке
+2. Используйте кнопки "Вверх"/"Вниз" для изменения порядка
+3. Группируйте связанные вопросы
+
+## ⚠️ ОГРАНИЧЕНИЯ СИСТЕМЫ
+
+### ТЕКУЩИЕ ОГРАНИЧЕНИЯ:
+1. Условия работают только с предыдущими вопросами
+2. Нельзя создавать сложные цепочки условий (только OR логика между условиями)
+3. Каждое условие проверяется независимо
+
+### РЕШЕНИЕ ДЛЯ СЛОЖНЫХ СЛУЧАЕВ:
+Если нужна сложная логика - создайте несколько похожих вопросов с разными условиями:
+
+```
+Вместо: "Если A И B ИЛИ C, то показать вопрос X"
+Создайте: 
+- Вопрос X1 (условие: A И B)
+- Вопрос X2 (условие: C)
+```
+
+## 📋 ЧЕКЛИСТ СОЗДАНИЯ АНКЕТЫ
+
+### ✅ ПОДГОТОВКА:
+- [ ] Определить цель анкеты
+- [ ] Составить список всех вопросов
+- [ ] Определить логику показа вопросов
+- [ ] Спланировать порядок вопросов
+
+### ✅ СОЗДАНИЕ:
+- [ ] Создать анкету в системе
+- [ ] Добавить все основные вопросы
+- [ ] Настроить варианты ответов
+- [ ] Добавить условия показа
+
+### ✅ ТЕСТИРОВАНИЕ:
+- [ ] Пройти анкету с разными ответами
+- [ ] Проверить работу всех условий
+- [ ] Убедиться в корректности логики
+- [ ] Исправить найденные ошибки
+
+### ✅ ФИНАЛИЗАЦИЯ:
+- [ ] Активировать анкету
+- [ ] Сохранить резервную копию
+- [ ] Подготовить инструкции для пользователей
+
+## 🆘 РЕШЕНИЕ ПРОБЛЕМ
+
+### ПРОБЛЕМА: Вопрос не показывается
+**РЕШЕНИЕ:** Проверьте условия вопроса - возможно, они слишком строгие
+
+### ПРОБЛЕМА: Вопрос показывается всегда
+**РЕШЕНИЕ:** Убедитесь, что условия добавлены правильно
+
+### ПРОБЛЕМА: Сложная логика не работает
+**РЕШЕНИЕ:** Используйте дублирование вопросов с разными условиями
+
+### ПРОБЛЕМА: Анкета зависает при редактировании
+**РЕШЕНИЕ:** Перезапустите приложение и попробуйте снова
+
+## 📞 ПОДДЕРЖКА
+
+При возникновении проблем:
+1. Проверьте этот список решений
+2. Убедитесь, что условия настроены правильно
+3. Протестируйте анкету с простыми ответами
+4. При необходимости создайте упрощенную версию анкеты
+
+---
+**Версия документации:** 1.0  
+**Дата обновления:** 2025  
+**Автор:** ASRR Team
+        """
+        
+        text_area.setPlainText(documentation)
+        layout.addWidget(text_area)
+        
+        # Кнопка закрытия
+        close_button = QPushButton("Закрыть")
+        close_button.clicked.connect(doc_window.accept)
+        close_button.setStyleSheet("QPushButton { background-color: #4CAF50; color: white; border: none; padding: 10px; border-radius: 5px; font-weight: bold; }")
+        
+        button_layout = QHBoxLayout()
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+        button_layout.addStretch()
+        
+        layout.addLayout(button_layout)
+        
+        doc_window.exec()
+    
     def show_survey_editor(self, survey, parent):
         """Показываем редактор анкеты"""
         editor_window = QDialog(parent)
@@ -848,6 +1083,10 @@ class SurveyApp(QMainWindow):
         edit_question_btn = QPushButton("Редактировать")
         edit_question_btn.clicked.connect(lambda: self.edit_question(survey, editor_window))
         
+        copy_question_btn = QPushButton("📋 Копировать")
+        copy_question_btn.clicked.connect(lambda: self.copy_question(survey, editor_window))
+        copy_question_btn.setStyleSheet("QPushButton { background-color: #FF9800; color: white; border: none; padding: 5px; border-radius: 3px; }")
+        
         delete_question_btn = QPushButton("Удалить")
         delete_question_btn.clicked.connect(lambda: self.delete_question(survey, editor_window))
         
@@ -858,6 +1097,7 @@ class SurveyApp(QMainWindow):
         move_down_btn.clicked.connect(lambda: self.move_question_down(survey, editor_window))
         
         question_buttons.addWidget(edit_question_btn)
+        question_buttons.addWidget(copy_question_btn)
         question_buttons.addWidget(delete_question_btn)
         question_buttons.addWidget(move_up_btn)
         question_buttons.addWidget(move_down_btn)
@@ -1031,7 +1271,8 @@ class SurveyApp(QMainWindow):
     
     def add_option(self):
         """Добавляем вариант ответа"""
-        option, ok = QInputDialog.getText(self, "Вариант ответа", "Введите вариант ответа:")
+        # Используем None как родительское окно чтобы избежать проблем с модальностью
+        option, ok = QInputDialog.getText(None, "Вариант ответа", "Введите вариант ответа:")
         if ok and option.strip():
             self.options_list.addItem(option.strip())
     
@@ -1043,7 +1284,8 @@ class SurveyApp(QMainWindow):
             return
         
         current_text = current_item.text()
-        new_text, ok = QInputDialog.getText(self, "Редактирование варианта", "Введите новый текст:", text=current_text)
+        # Используем None как родительское окно чтобы избежать проблем с модальностью
+        new_text, ok = QInputDialog.getText(None, "Редактирование варианта", "Введите новый текст:", text=current_text)
         if ok and new_text.strip():
             current_item.setText(new_text.strip())
     
@@ -1058,6 +1300,9 @@ class SurveyApp(QMainWindow):
         if len(survey['questions']) < 2:
             QMessageBox.information(self, "Информация", "Нужно минимум 2 вопроса для создания условий")
             return
+        
+        # Сохраняем ссылку на survey для использования в других методах
+        self.current_survey_for_condition = survey
         
         condition_dialog = QDialog(self)
         condition_dialog.setWindowTitle("Добавить условие")
@@ -1119,17 +1364,24 @@ class SurveyApp(QMainWindow):
         
         condition_dialog.exec()
     
-    def update_condition_value_options(self, survey):
+    def update_condition_value_options(self, survey=None):
         """Обновляем опции для выбора значения условия"""
         # Очищаем контейнер
         for i in reversed(range(self.checkbox_layout.count())):
             self.checkbox_layout.itemAt(i).widget().setParent(None)
         
         target_index = self.target_question_combo.currentData()
+        self.log_debug(f"update_condition_value_options: target_index={target_index}")
         if target_index is None:
             return
         
+        # Используем переданный survey или сохраненный
+        survey = survey or getattr(self, 'current_survey_for_condition', None)
+        if not survey:
+            return
+            
         target_question = survey['questions'][target_index]
+        self.log_debug(f"  target_question id={target_question.get('id')} type={target_question.get('type')} text={target_question.get('text')}")
         
         # Если вопрос имеет тип checkbox или radio, показываем опции для быстрого выбора
         if target_question.get('type') in ['checkbox', 'radio'] and target_question.get('options'):
@@ -1139,14 +1391,12 @@ class SurveyApp(QMainWindow):
             
             for option in target_question['options']:
                 if target_question.get('type') == 'checkbox':
-                    # Для checkbox используем чекбоксы
                     checkbox = QCheckBox(option)
                     checkbox.toggled.connect(
                         lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
                     )
                     self.checkbox_layout.addWidget(checkbox)
                 else:  # radio
-                    # Для radio используем радиокнопки
                     radio = QRadioButton(option)
                     radio.toggled.connect(
                         lambda checked, opt=option: self.condition_value_edit.setText(opt) if checked else None
@@ -1158,6 +1408,7 @@ class SurveyApp(QMainWindow):
         target_index = self.target_question_combo.currentData()
         operator = self.operator_combo.currentText()
         value = self.condition_value_edit.text()
+        self.log_debug(f"save_condition: target_index={target_index} operator={operator} value={value}")
         
         if not value:
             QMessageBox.warning(self, "Ошибка", "Введите значение для условия")
@@ -1174,10 +1425,20 @@ class SurveyApp(QMainWindow):
             "меньше или равно": "less_or_equal"
         }
         
+        # Получаем реальный ID целевого вопроса
+        survey = getattr(self, 'current_survey_for_condition', None)
+        if survey and target_index is not None and 0 <= target_index < len(survey['questions']):
+            target_question_id = survey['questions'][target_index]['id']
+            self.log_debug(f"  resolved target_question_id={target_question_id}")
+        else:
+            self.log_debug(f"  ERROR: invalid target_index={target_index}, survey={survey is not None}, questions_count={len(survey['questions']) if survey else 0}")
+            QMessageBox.warning(self, "Ошибка", "Неверный индекс целевого вопроса")
+            return
+        
         condition = {
             'id': str(uuid.uuid4()),
-            'targetId': f"q{target_index}",
-            'operator': operator_map[operator],
+            'targetId': target_question_id,
+            'operator': operator_map.get(operator, operator),
             'value': value
         }
         
@@ -1189,6 +1450,7 @@ class SurveyApp(QMainWindow):
         if not hasattr(self, 'current_conditions'):
             self.current_conditions = []
         self.current_conditions.append(condition)
+        self.log_debug(f"  saved condition: {condition}")
         
         dialog.accept()
     
@@ -1343,29 +1605,57 @@ class SurveyApp(QMainWindow):
         # Загружаем условия
         self.conditions_list.clear()
         self.current_conditions = question.get('conditions', [])
-        for condition in self.current_conditions:
-            # Находим целевой вопрос по ID
-            target_question = None
-            # Используем переданный survey или self.current_survey
-            questions_list = survey['questions'] if survey else (self.current_survey['questions'] if hasattr(self, 'current_survey') and self.current_survey else [])
-            for q in questions_list:
-                if q['id'] == condition['targetId']:
-                    target_question = q
-                    break
-            
-            # Преобразуем оператор в русский текст
-            operator_map = {
-                "equals": "равно",
-                "not_equals": "не равно", 
-                "contains": "содержит",
-                "greater_than": "больше",
-                "less_than": "меньше"
-            }
-            
-            operator_text = operator_map.get(condition['operator'], condition['operator'])
-            question_text = target_question['text'] if target_question else condition['targetId']
-            condition_text = f"Если {question_text} {operator_text} '{condition['value']}'"
-            self.conditions_list.addItem(condition_text)
+        self.log_debug(f"load_question_data: question_id={question.get('id')} cond_count={len(self.current_conditions)}")
+        migrated = False
+        for idx, condition in enumerate(self.current_conditions):
+            try:
+                self.log_debug(f"  cond[{idx}] before: targetId={condition.get('targetId')} operator={condition.get('operator')} value={condition.get('value')}")
+                # Миграция legacy targetId вида qN -> UUID текущего вопроса
+                tgt = condition.get('targetId')
+                if isinstance(tgt, str) and len(tgt) >= 2 and tgt[0] == 'q' and tgt[1:].isdigit():
+                    mig_idx = int(tgt[1:])
+                    questions_list_for_migration = survey['questions'] if survey else (self.current_survey['questions'] if hasattr(self, 'current_survey') and self.current_survey else [])
+                    if 0 <= mig_idx < len(questions_list_for_migration):
+                        condition['targetId'] = questions_list_for_migration[mig_idx]['id']
+                        migrated = True
+                        self.log_debug(f"    migrated targetId q{mig_idx} -> {condition['targetId']}")
+                
+                # Находим целевой вопрос по ID
+                target_question = None
+                questions_list = survey['questions'] if survey else (self.current_survey['questions'] if hasattr(self, 'current_survey') and self.current_survey else [])
+                for q in questions_list:
+                    if q['id'] == condition['targetId']:
+                        target_question = q
+                        break
+                if not target_question:
+                    self.log_debug(f"    WARN: target question not found for targetId={condition.get('targetId')}")
+                
+                # Преобразуем оператор в русский текст
+                operator_map = {
+                    "equals": "равно",
+                    "not_equals": "не равно", 
+                    "contains": "содержит",
+                    "greater_than": "больше",
+                    "greater_or_equal": "больше или равно",
+                    "less_than": "меньше",
+                    "less_or_equal": "меньше или равно",
+                }
+                operator_text = operator_map.get(condition.get('operator'), condition.get('operator'))
+                question_text = target_question['text'] if target_question else condition.get('targetId')
+                condition_text = f"Если {question_text} {operator_text} '{condition.get('value')}'"
+                self.conditions_list.addItem(condition_text)
+                self.log_debug(f"  cond[{idx}] display: {condition_text}")
+            except Exception as e:
+                self.log_debug(f"  ERROR rendering cond[{idx}]: {e}")
+        
+        # Сохраняем миграцию, если были изменения
+        if migrated:
+            try:
+                question['conditions'] = self.current_conditions
+                self.save_surveys()
+                self.log_debug("  migration saved to surveys.json")
+            except Exception as e:
+                self.log_debug(f"  ERROR saving migration: {e}")
     
     def save_question(self, survey, question_index, dialog):
         """Сохраняем вопрос"""
@@ -1383,26 +1673,33 @@ class SurveyApp(QMainWindow):
             options.append(self.options_list.item(i).text())
         
         # Создаем или обновляем вопрос
-        question = {
-            'id': f"q{len(survey['questions']) if question_index is None else question_index}",
-            'text': text,
-            'type': question_type,
-            'required': required,
-            'options': options if question_type in ['radio', 'checkbox'] else [],
-            'conditions': getattr(self, 'current_conditions', [])
-        }
-        
-        # Для первого вопроса убираем все условия (чтобы избежать циклических зависимостей)
-        if question_index is None and len(survey['questions']) == 0:
-            question['conditions'] = []
-            print("DEBUG: Первый вопрос создан БЕЗ условий")
-        
         if question_index is None:
-            # Новый вопрос
+            # Новый вопрос - создаем новый ID
+            question = {
+                'id': str(uuid.uuid4()),
+                'text': text,
+                'type': question_type,
+                'required': required,
+                'options': options if question_type in ['radio', 'checkbox'] else [],
+                'conditions': getattr(self, 'current_conditions', [])
+            }
+            
+            # Для первого вопроса убираем все условия (чтобы избежать циклических зависимостей)
+            if len(survey['questions']) == 0:
+                question['conditions'] = []
+                print("DEBUG: Первый вопрос создан БЕЗ условий")
+            
             survey['questions'].append(question)
         else:
-            # Обновляем существующий
-            survey['questions'][question_index] = question
+            # Редактируем существующий вопрос - сохраняем старый ID
+            question = survey['questions'][question_index]
+            question.update({
+                'text': text,
+                'type': question_type,
+                'required': required,
+                'options': options if question_type in ['radio', 'checkbox'] else [],
+                'conditions': getattr(self, 'current_conditions', [])
+            })
         
         # Сохраняем анкету
         self.save_surveys()
@@ -1426,6 +1723,40 @@ class SurveyApp(QMainWindow):
             del survey['questions'][question_index]
             self.save_surveys()
             self.load_questions_to_editor(survey)
+    
+    def copy_question(self, survey, parent):
+        """Копируем вопрос"""
+        current_item = self.questions_list.currentItem()
+        if not current_item:
+            QMessageBox.warning(parent, "Предупреждение", "Выберите вопрос для копирования")
+            return
+        
+        question_index = current_item.data(Qt.ItemDataRole.UserRole)
+        original_question = survey['questions'][question_index]
+        
+        # Создаем копию вопроса с новым ID
+        copied_question = {
+            'id': str(uuid.uuid4()),
+            'text': original_question['text'] + " (копия)",
+            'type': original_question['type'],
+            'options': original_question.get('options', [])[:],  # Копируем список
+            'required': original_question.get('required', False),
+            'conditions': original_question.get('conditions', [])[:] if original_question.get('conditions') else []  # Копируем условия
+        }
+        
+        # Вставляем копию после текущего вопроса
+        survey['questions'].insert(question_index + 1, copied_question)
+        
+        # Сохраняем анкету
+        self.save_surveys()
+        
+        # Обновляем список вопросов
+        self.load_questions_to_editor(survey)
+        
+        # Выделяем скопированный вопрос
+        self.questions_list.setCurrentRow(question_index + 1)
+        
+        QMessageBox.information(parent, "Успех", "Вопрос скопирован! Теперь вы можете отредактировать его.")
     
     def move_question_up(self, survey, parent):
         """Перемещаем вопрос вверх"""
@@ -1532,13 +1863,17 @@ class SurveyApp(QMainWindow):
         if question_index == 0:
             return True
 
-        # Все условия должны выполняться (AND логика)
-        for condition in conditions:
-            condition_result = self.check_condition(condition, answers)
-            if not condition_result:
-                return False
-
-        return True
+        # Любое условие должно выполняться (OR логика)
+        for cidx, condition in enumerate(conditions):
+            try:
+                result = self.check_condition(condition, answers)
+                self.log_debug(f"should_show_question: qid={question.get('id')} cond[{cidx}] => {result}")
+                if result:
+                    return True
+            except Exception as e:
+                self.log_debug(f"should_show_question ERROR cond[{cidx}]: {e}")
+        
+        return False
     
     def check_condition(self, condition, answers):
         """Проверяем условие"""
@@ -1548,6 +1883,7 @@ class SurveyApp(QMainWindow):
         
         # Получаем ответ на целевой вопрос
         answer = answers.get(target_id)
+        self.log_debug(f"check_condition: targetId={target_id} operator={operator} value={value} answer={answer}")
         if answer is None:
             return False
         
@@ -1561,25 +1897,20 @@ class SurveyApp(QMainWindow):
                 return value in answer
             else:
                 return str(value) in str(answer)
-        elif operator == 'greater_than':
+        elif operator in ('greater_than', 'greater_or_equal', 'less_than', 'less_or_equal'):
             try:
-                return float(answer) > float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == 'greater_or_equal':
-            try:
-                return float(answer) >= float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == 'less_than':
-            try:
-                return float(answer) < float(value)
-            except (ValueError, TypeError):
-                return False
-        elif operator == 'less_or_equal':
-            try:
-                return float(answer) <= float(value)
-            except (ValueError, TypeError):
+                a = float(answer)
+                b = float(value)
+                if operator == 'greater_than':
+                    return a > b
+                if operator == 'greater_or_equal':
+                    return a >= b
+                if operator == 'less_than':
+                    return a < b
+                if operator == 'less_or_equal':
+                    return a <= b
+            except (ValueError, TypeError) as e:
+                self.log_debug(f"  NUMERIC CONVERT ERROR: answer={answer} value={value} err={e}")
                 return False
         
         return False
