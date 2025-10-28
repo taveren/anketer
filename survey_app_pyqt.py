@@ -131,23 +131,35 @@ class SurveyApp(QMainWindow):
     def setup_icon(self):
         """Устанавливаем иконку приложения"""
         try:
-            # Пытаемся загрузить логотип ASRR
+            # Базовая директория: поддержка PyInstaller one-file (sys._MEIPASS)
+            base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
+            # Пытаемся загрузить логотип ASRR из доступных путей
             icon_paths = [
-                os.path.join(os.path.dirname(__file__), "asrr_logo.ico"),
-                os.path.join(os.path.dirname(__file__), "asrr_logo.png"),
-                os.path.join(os.path.dirname(__file__), "public_icon.ico")
+                os.path.join(base_dir, "asrr_logo.ico"),
+                os.path.join(base_dir, "asrr_logo.png"),
+                os.path.join(base_dir, "public_icon.ico")
             ]
             
             for icon_path in icon_paths:
                 if os.path.exists(icon_path):
-                    self.setWindowIcon(QIcon(icon_path))
+                    icon = QIcon(icon_path)
+                    # Иконка окна
+                    self.setWindowIcon(icon)
+                    # Иконка приложения (для панели задач)
+                    app = QApplication.instance()
+                    if app:
+                        app.setWindowIcon(icon)
                     print(f"Иконка загружена: {icon_path}")
                     return
             
             # Если иконка не найдена, создаем простую иконку
             pixmap = QPixmap(32, 32)
             pixmap.fill(QColor("#3498db"))
-            self.setWindowIcon(QIcon(pixmap))
+            fallback_icon = QIcon(pixmap)
+            self.setWindowIcon(fallback_icon)
+            app = QApplication.instance()
+            if app:
+                app.setWindowIcon(fallback_icon)
             print("Использована стандартная иконка")
         except Exception as e:
             print(f"Ошибка загрузки иконки: {e}")
