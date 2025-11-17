@@ -29,7 +29,7 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QPalette, QColor
 class SurveyApp(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("ASRR - Система анкетирования")
+        self.setWindowTitle("Almazov - Система анкетирования")
         self.setGeometry(100, 100, 400, 300)
         self.setFixedSize(400, 300)
         self.center_window() # Центрируем окно
@@ -133,8 +133,10 @@ class SurveyApp(QMainWindow):
         try:
             # Базовая директория: поддержка PyInstaller one-file (sys._MEIPASS)
             base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
-            # Пытаемся загрузить логотип ASRR из доступных путей
+            # Пытаемся загрузить логотип Almazov из доступных путей
             icon_paths = [
+                os.path.join(base_dir, "almazov_logo.ico"),
+                os.path.join(base_dir, "almazov_logo.png"),
                 os.path.join(base_dir, "asrr_logo.ico"),
                 os.path.join(base_dir, "asrr_logo.png"),
                 os.path.join(base_dir, "public_icon.ico")
@@ -1034,7 +1036,7 @@ class SurveyApp(QMainWindow):
 ---
 **Версия документации:** 1.0  
 **Дата обновления:** 2025  
-**Автор:** ASRR Team
+**Автор:** Almazov Team
         """
         
         text_area.setPlainText(documentation)
