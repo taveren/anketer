@@ -30,8 +30,8 @@ class SurveyApp(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Almazov - Система анкетирования")
-        self.setGeometry(100, 100, 400, 300)
-        self.setFixedSize(400, 300)
+        self.setGeometry(100, 100, 400, 450)
+        self.setFixedSize(400, 450)
         self.center_window() # Центрируем окно
         
         # Определяем путь к данным
@@ -134,7 +134,9 @@ class SurveyApp(QMainWindow):
             # Базовая директория: поддержка PyInstaller one-file (sys._MEIPASS)
             base_dir = getattr(sys, '_MEIPASS', os.path.dirname(__file__))
             # Пытаемся загрузить логотип Almazov из доступных путей
+            # Сначала квадратная PNG версия для сохранения пропорций
             icon_paths = [
+                os.path.join(base_dir, "almazov_logo_square.png"),
                 os.path.join(base_dir, "almazov_logo.ico"),
                 os.path.join(base_dir, "almazov_logo.png"),
                 os.path.join(base_dir, "asrr_logo.ico"),
@@ -144,15 +146,33 @@ class SurveyApp(QMainWindow):
             
             for icon_path in icon_paths:
                 if os.path.exists(icon_path):
-                    icon = QIcon(icon_path)
-                    # Иконка окна
-                    self.setWindowIcon(icon)
-                    # Иконка приложения (для панели задач)
-                    app = QApplication.instance()
-                    if app:
-                        app.setWindowIcon(icon)
-                    print(f"Иконка загружена: {icon_path}")
-                    return
+                    # Загружаем иконку с сохранением пропорций
+                    pixmap = QPixmap(icon_path)
+                    if not pixmap.isNull():
+                        # Создаем иконку с правильными размерами для разных контекстов
+                        icon = QIcon()
+                        
+                        # Добавляем разные размеры для правильного отображения
+                        sizes = [16, 32, 48, 64, 128, 256]
+                        for size in sizes:
+                            scaled_pixmap = pixmap.scaled(
+                                size, size, 
+                                Qt.AspectRatioMode.KeepAspectRatio, 
+                                Qt.TransformationMode.SmoothTransformation
+                            )
+                            icon.addPixmap(scaled_pixmap)
+                        
+                        # Также добавляем оригинальный размер
+                        icon.addPixmap(pixmap)
+                        
+                        # Иконка окна
+                        self.setWindowIcon(icon)
+                        # Иконка приложения (для панели задач)
+                        app = QApplication.instance()
+                        if app:
+                            app.setWindowIcon(icon)
+                        print(f"Иконка загружена: {icon_path}")
+                        return
             
             # Если иконка не найдена, создаем простую иконку
             pixmap = QPixmap(32, 32)
@@ -253,8 +273,10 @@ class SurveyApp(QMainWindow):
         
         main_layout.addWidget(self.start_button)
         
-        # Добавляем растягивающий элемент для центрирования
-        main_layout.addStretch()
+        # Добавляем отступ снизу под кнопкой СТАРТ
+        bottom_spacer = QWidget()
+        bottom_spacer.setFixedHeight(25)
+        main_layout.addWidget(bottom_spacer)
     
     def start_default_survey(self):
         """Запускаем анкету по умолчанию"""
