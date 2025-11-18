@@ -48,6 +48,25 @@ class SurveyApp(QMainWindow):
         self.responses = self.load_responses()
         self.settings = self.load_settings()
         
+        # Если нет анкеты по умолчанию, устанавливаем встроенную
+        builtin_survey_id = "91ab3e9e-441e-4227-81d8-8011c47fbd9a"
+        if not self.settings.get("default_survey_id"):
+            # Ищем встроенную анкету
+            builtin_survey = None
+            for survey in self.surveys:
+                if survey.get("id") == builtin_survey_id:
+                    builtin_survey = survey
+                    break
+            
+            # Если встроенная анкета найдена, устанавливаем её по умолчанию
+            if builtin_survey:
+                self.settings["default_survey_id"] = builtin_survey_id
+                self.save_settings()
+            # Если встроенной анкеты нет, но есть другие анкеты, берем первую
+            elif self.surveys:
+                self.settings["default_survey_id"] = self.surveys[0].get("id")
+                self.save_settings()
+        
         # Текущий пользователь
         self.current_survey = None
         self.current_answers = {}
@@ -77,15 +96,244 @@ class SurveyApp(QMainWindow):
             home = os.path.expanduser("~")
             return os.path.join(home, ".local", "share", "SurveyApp", "Data")
     
+    def get_builtin_survey(self) -> Dict:
+        """Возвращает встроенную анкету по умолчанию"""
+        # Фиксированные UUID для вопросов (чтобы условия работали)
+        q0_id = "a1b2c3d4-e5f6-4789-a012-345678901234"
+        q1_id = "b2c3d4e5-f6a7-4890-b123-456789012345"
+        q2_id = "c3d4e5f6-a7b8-4901-c234-567890123456"
+        q3_id = "d4e5f6a7-b8c9-4012-d345-678901234567"
+        q4_id = "e5f6a7b8-c9d0-4123-e456-789012345678"
+        q5_id = "f6a7b8c9-d0e1-4234-f567-890123456789"
+        q6_id = "a7b8c9d0-e1f2-4345-a678-901234567890"
+        q7_id = "b8c9d0e1-f2a3-4456-b789-012345678901"
+        q8_id = "c9d0e1f2-a3b4-4567-c890-123456789012"
+        q9_id = "d0e1f2a3-b4c5-4678-d901-234567890123"
+        
+        return {
+            "id": "91ab3e9e-441e-4227-81d8-8011c47fbd9a",
+            "title": "ORADS Survey",
+            "questions": [
+                {
+                    "id": q0_id,
+                    "text": "Характеристика УЗИ по категории ORADS",
+                    "type": "radio",
+                    "required": True,
+                    "options": ["ORADS2", "ORADS3", "ORADS4-5"],
+                    "conditions": []
+                },
+                {
+                    "id": q1_id,
+                    "text": "Какие маркёры",
+                    "type": "radio",
+                    "required": False,
+                    "options": ["М+", "М-"],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q0_id,
+                            "operator": "contains",
+                            "value": "ORADS2"
+                        }
+                    ]
+                },
+                {
+                    "id": q2_id,
+                    "text": "Контроль CA-125",
+                    "type": "number",
+                    "required": False,
+                    "options": [],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q0_id,
+                            "operator": "equals",
+                            "value": "ORADS3"
+                        }
+                    ]
+                },
+                {
+                    "id": q3_id,
+                    "text": "Какие маркёры контроль",
+                    "type": "radio",
+                    "required": False,
+                    "options": ["М+", "М-"],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q2_id,
+                            "operator": "greater_than",
+                            "value": "31"
+                        }
+                    ]
+                },
+                {
+                    "id": q4_id,
+                    "text": "НИЗКИЙ РИСК\n- Динамическое наблюдение\n- Повтор УЗИ малого таза через 6-12 месяцев, при показаниях - CA-125",
+                    "type": "text",
+                    "required": False,
+                    "options": [],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q1_id,
+                            "operator": "contains",
+                            "value": "М-"
+                        }
+                    ]
+                },
+                {
+                    "id": q5_id,
+                    "text": "Выполнение МРТ ОМТ",
+                    "type": "radio",
+                    "required": False,
+                    "options": ["ORADS2-3", "ORADS4-5"],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q3_id,
+                            "operator": "equals",
+                            "value": "М+"
+                        }
+                    ]
+                },
+                {
+                    "id": q6_id,
+                    "text": "СРЕДНИЙ РИСК\n- Экспертное УЗИ малого таза через 3-6 месяцев, при показаниях МРТ\n- Контроль показателей через 3 мес. (онкомаркеры, метаболом)\n- Консультация онкогинеколога",
+                    "type": "text",
+                    "required": False,
+                    "options": [],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q1_id,
+                            "operator": "contains",
+                            "value": "М+"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q2_id,
+                            "operator": "less_or_equal",
+                            "value": "30"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q5_id,
+                            "operator": "equals",
+                            "value": "ORADS2-3"
+                        }
+                    ]
+                },
+                {
+                    "id": q7_id,
+                    "text": "ВЫСОКИЙ РИСК\n- Консультация онкогинеколога в срочном порядке\n- Хирургическое лечение\n- Предоперационный комплекс обследований (МРТ, ОМТ, ФКС, ФГДС, онкомаркеры/метаболом, ГИ эндометрия, онкоцитология)",
+                    "type": "radio",
+                    "required": False,
+                    "options": ["CA-125≤N (M+)", "CA-125>N (M+)", "CA-125≤N (M-)", "CA-125>N (M-)"],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q0_id,
+                            "operator": "equals",
+                            "value": "ORADS4-5"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q6_id,
+                            "operator": "equals",
+                            "value": "ORADS4-5"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q5_id,
+                            "operator": "equals",
+                            "value": "ORADS4-5"
+                        }
+                    ]
+                },
+                {
+                    "id": q8_id,
+                    "text": "Высокая вероятность интервальной циторедукции",
+                    "type": "text",
+                    "required": False,
+                    "options": [],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q7_id,
+                            "operator": "equals",
+                            "value": "CA-125≤N (M+)"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q7_id,
+                            "operator": "equals",
+                            "value": "CA-125>N (M+)"
+                        }
+                    ]
+                },
+                {
+                    "id": q9_id,
+                    "text": "Высокая вероятность первичной циторедукции",
+                    "type": "text",
+                    "required": False,
+                    "options": [],
+                    "conditions": [
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q7_id,
+                            "operator": "equals",
+                            "value": "CA-125≤N (M-)"
+                        },
+                        {
+                            "id": str(uuid.uuid4()),
+                            "targetId": q7_id,
+                            "operator": "equals",
+                            "value": "CA-125>N (M-)"
+                        }
+                    ]
+                }
+            ],
+            "createdAt": datetime.now().isoformat(),
+            "isActive": True
+        }
+    
     def load_surveys(self) -> List[Dict]:
         """Загружаем анкеты из файла"""
+        surveys = []
         if os.path.exists(self.surveys_file):
             try:
                 with open(self.surveys_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    surveys = json.load(f)
             except Exception as e:
                 print(f"Ошибка загрузки анкет: {e}")
-        return []
+        
+        # Проверяем, есть ли встроенная анкета
+        builtin_survey_id = "91ab3e9e-441e-4227-81d8-8011c47fbd9a"
+        has_builtin = any(s.get("id") == builtin_survey_id for s in surveys)
+        
+        # Если встроенной анкеты нет, добавляем её в начало списка
+        if not has_builtin:
+            builtin_survey = self.get_builtin_survey()
+            surveys.insert(0, builtin_survey)
+            # Сохраняем обновленный список
+            try:
+                with open(self.surveys_file, 'w', encoding='utf-8') as f:
+                    json.dump(surveys, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Ошибка сохранения встроенной анкеты: {e}")
+        
+        # Если анкет вообще нет, создаем только встроенную
+        if not surveys:
+            builtin_survey = self.get_builtin_survey()
+            surveys = [builtin_survey]
+            try:
+                with open(self.surveys_file, 'w', encoding='utf-8') as f:
+                    json.dump(surveys, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"Ошибка сохранения встроенной анкеты: {e}")
+        
+        return surveys
     
     def load_responses(self) -> List[Dict]:
         """Загружаем ответы из файла"""
@@ -240,6 +488,27 @@ class SurveyApp(QMainWindow):
         """)
         self.settings_button.clicked.connect(self.show_admin_panel)
         settings_layout.addWidget(self.settings_button)
+        
+        # Кнопка подсказки с паролем
+        self.help_button = QPushButton("?")
+        self.help_button.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        self.help_button.setFixedSize(30, 30)
+        self.help_button.setToolTip("Пароль по умолчанию: admin123")
+        self.help_button.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 15px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        self.help_button.clicked.connect(self.show_password_hint)
+        settings_layout.addWidget(self.help_button)
+        
         settings_layout.addStretch()
         
         main_layout.addLayout(settings_layout)
@@ -702,6 +971,14 @@ class SurveyApp(QMainWindow):
         
         QMessageBox.information(self, "Успех", "Анкета успешно завершена!")
         self.survey_window.accept()
+    
+    def show_password_hint(self):
+        """Показывает подсказку с паролем по умолчанию"""
+        QMessageBox.information(
+            self, 
+            "Подсказка", 
+            "Пароль администратора по умолчанию:\n\nadmin123\n\nВы можете изменить пароль в настройках после входа."
+        )
     
     def show_admin_panel(self):
         """Показываем панель администратора"""
